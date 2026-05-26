@@ -51,9 +51,11 @@ def main():
             print(json.dumps({"error": f"Failed to load page. Status: {response.status}"}), file=sys.stdout)
             sys.exit(1)
 
-        # Detect if it is a search autocomplete query, a manga info page, or a chapter reading page
+        # Detect page type
         is_search = "/search-autocomplete" in url.lower() or "term=" in url.lower()
-        is_manga_page = not is_search and ("/manga/" in url.lower() or not ("/leer/" in url.lower() or "capitulo-" in url.lower()))
+        url_lower = url.lower().rstrip('/')
+        is_home = url_lower == "https://www.leercapitulo.co" or url_lower == "http://www.leercapitulo.co" or url_lower == "https://leercapitulo.co" or url_lower == "http://leercapitulo.co"
+        is_manga_page = not is_search and not is_home and ("/manga/" in url.lower() or not ("/leer/" in url.lower() or "capitulo-" in url.lower()))
 
         if is_search:
             try:
@@ -119,6 +121,122 @@ def main():
                 output = {
                     "success": False,
                     "error": f"Failed to parse search results: {str(e)}"
+                }
+        elif is_home:
+            try:
+                tendencias = []
+                for el in response.css('.hot-manga'):
+                    title_el = el.css('.manga-title')
+                    title = get_element_text(title_el[0]) if title_el else ""
+                    
+                    link_el = el.css('a[href*="/manga/"]')
+                    link = link_el[0].attrib.get('href', '') if link_el else ""
+                    
+                    img_el = el.css('img')
+                    cover = ""
+                    if img_el:
+                        img = img_el[0]
+                        cover = img.attrib.get('data-src') or img.attrib.get('src') or ""
+                    
+                    ch_el = el.css('a[href*="/leer/"]')
+                    latest_ch = {}
+                    if ch_el:
+                        ch_link = ch_el[0].attrib.get('href', '')
+                        ch_text = get_element_text(ch_el[0])
+                        num = ch_link.rstrip('/').split('/')[-1] if ch_link else ""
+                        latest_ch = {
+                            "number": num,
+                            "title": ch_text,
+                            "url": ch_link
+                        }
+                    
+                    slug = link.rstrip('/').split('/')[-1] if link else ""
+                    
+                    if link and not link.startswith('http'):
+                        link = 'https://www.leercapitulo.co' + link
+                    if cover and not cover.startswith('http'):
+                        if cover.startswith('//'):
+                            cover = 'https:' + cover
+                        else:
+                            cover = 'https://www.leercapitulo.co' + cover
+                    if latest_ch.get("url") and not latest_ch["url"].startswith('http'):
+                        latest_ch["url"] = 'https://www.leercapitulo.co' + latest_ch["url"]
+
+                    tendencias.append({
+                        "title": title,
+                        "slug": slug,
+                        "url": link,
+                        "cover": cover,
+                        "latest_chapter": latest_ch
+                    })
+                    
+                recientes = []
+                for el in response.css('.mainpage-manga'):
+                    title_el = el.css('.manga-newest')
+                    title = get_element_text(title_el[0]) if title_el else ""
+                    
+                    link_el = el.css('a[href*="/manga/"]')
+                    link = link_el[0].attrib.get('href', '') if link_el else ""
+                    
+                    img_el = el.css('img')
+                    cover = ""
+                    if img_el:
+                        img = img_el[0]
+                        cover = img.attrib.get('data-src') or img.attrib.get('src') or ""
+                    
+                    slug = link.rstrip('/').split('/')[-1] if link else ""
+                    
+                    chapters = []
+                    ch_spans = el.css('.hotup-list span')
+                    time_tags = el.css('.hotup-list i')
+                    
+                    for idx, span in enumerate(ch_spans):
+                        ch_a = span.css('a')
+                        if ch_a:
+                            ch_link = ch_a[0].attrib.get('href', '')
+                            ch_text = get_element_text(ch_a[0])
+                            num = ch_link.rstrip('/').split('/')[-1] if ch_link else ""
+                            
+                            time_text = ""
+                            if idx < len(time_tags):
+                                time_text = get_element_text(time_tags[idx])
+                                
+                            if ch_link and not ch_link.startswith('http'):
+                                ch_link = 'https://www.leercapitulo.co' + ch_link
+                                
+                            chapters.append({
+                                "number": num,
+                                "title": ch_text,
+                                "url": ch_link,
+                                "time": time_text
+                            })
+                    
+                    if link and not link.startswith('http'):
+                        link = 'https://www.leercapitulo.co' + link
+                    if cover and not cover.startswith('http'):
+                        if cover.startswith('//'):
+                            cover = 'https:' + cover
+                        else:
+                            cover = 'https://www.leercapitulo.co' + cover
+                            
+                    recientes.append({
+                        "title": title,
+                        "slug": slug,
+                        "url": link,
+                        "cover": cover,
+                        "chapters": chapters
+                    })
+                    
+                output = {
+                    "success": True,
+                    "type": "home",
+                    "tendencias": tendencias,
+                    "recientes": recientes
+                }
+            except Exception as e:
+                output = {
+                    "success": False,
+                    "error": f"Failed to parse home: {str(e)}"
                 }
         elif is_manga_page:
             # 1. Title
