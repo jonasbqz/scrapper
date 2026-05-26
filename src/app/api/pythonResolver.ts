@@ -23,6 +23,8 @@ export function getPythonExecutable(): string {
       path.join(process.cwd(), 'venv', 'bin', 'python3'),
       path.join(process.cwd(), 'scrapling-mcp', 'venv', 'bin', 'python'),
       path.join(process.cwd(), 'scrapling-mcp', 'venv', 'bin', 'python3'),
+      '/venv/bin/python',
+      '/venv/bin/python3',
       '/app/venv/bin/python',
       '/app/venv/bin/python3',
     ];

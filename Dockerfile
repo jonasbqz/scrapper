@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Create Python virtual environment and install Scrapling with Playwright
-RUN python3 -m venv /app/venv
-ENV PATH="/app/venv/bin:$PATH"
+RUN python3 -m venv /venv
+ENV PATH="/venv/bin:$PATH"
 
 # Install scrapling and its requirements
 RUN pip install --no-cache-dir --upgrade pip && \
