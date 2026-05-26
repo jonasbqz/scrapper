@@ -1,7 +1,6 @@
 FROM node:20-slim
 
 # Set environment variables
-ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -43,6 +42,9 @@ RUN npm run build
 
 # Prune devDependencies to keep the node_modules size minimal
 RUN npm prune --omit=dev
+
+# Set production environment variable
+ENV NODE_ENV=production
 
 # Expose the API server port
 EXPOSE 3000
