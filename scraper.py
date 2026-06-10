@@ -49,8 +49,15 @@ def main():
                 print(json.dumps({"error": f"Failed to load page. Status: {response.status}"}), file=sys.stdout)
                 sys.exit(1)
 
-            # Detect if it is a search autocomplete query, a manga info page, or a chapter reading page
+            # If not a search query, verify we weren't redirected to the home page (which means 404/not found)
             is_search = "/search-autocomplete" in url.lower() or "term=" in url.lower()
+            if not is_search:
+                final_url = response.url.lower().rstrip('/')
+                if final_url == "https://www.leercapitulo.co" or (not ("/manga/" in final_url or "/leer/" in final_url)):
+                    print(json.dumps({"success": False, "error": f"Manga or chapter not found (redirected to: {response.url})"}), file=sys.stdout)
+                    sys.exit(1)
+
+            # Detect if it is a search autocomplete query, a manga info page, or a chapter reading page
             is_manga_page = not is_search and ("/manga/" in url.lower() or not ("/leer/" in url.lower() or "capitulo-" in url.lower()))
 
             if is_search:
@@ -331,14 +338,14 @@ def main():
                     "count": len(image_urls)
                 }
 
-            print(json.dumps(output, indent=2, ensure_ascii=False), file=sys.stdout)
+            print(json.dumps(output, indent=2, ensure_ascii=True), file=sys.stdout)
         
     except Exception as e:
         error_output = {
             "success": False,
             "error": str(e)
         }
-        print(json.dumps(error_output, ensure_ascii=False), file=sys.stdout)
+        print(json.dumps(error_output, ensure_ascii=True), file=sys.stdout)
         sys.exit(1)
 
 if __name__ == "__main__":
