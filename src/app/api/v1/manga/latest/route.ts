@@ -1,71 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { execFile } from 'child_process';
-import path from 'path';
-import fs from 'fs';
-import { getPythonExecutable } from '../../../pythonResolver';
+import { NextResponse } from 'next/server';
+import { getErrorMessage, runScraper } from '../../../runScraper';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const targetUrl = 'https://www.leercapitulo.co';
 
-  // Paths to Python executable and the scraper script
-  const pythonExecutable = getPythonExecutable();
-  const scraperScript = path.join(process.cwd(), 'scraper.py');
-
-  // Verify paths exist
-  const isPath = pythonExecutable.includes('/') || pythonExecutable.includes('\\');
-  if (isPath && !fs.existsSync(pythonExecutable)) {
-    return NextResponse.json(
-      { success: false, error: `Python virtual env not found at: ${pythonExecutable}` },
-      { status: 500 }
-    );
-  }
-
-  if (!fs.existsSync(scraperScript)) {
-    return NextResponse.json(
-      { success: false, error: `Scraper script not found at: ${scraperScript}` },
-      { status: 500 }
-    );
-  }
-
   try {
-    const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-      execFile(pythonExecutable, [scraperScript, targetUrl], (error, stdout, stderr) => {
-        if (error) {
-          reject({ error, stdout, stderr });
-        } else {
-          resolve({ stdout, stderr });
-        }
-      });
-    });
+    const result = await runScraper(targetUrl, 'scraping latest');
 
-    try {
-      const parsedData = JSON.parse(result.stdout);
-      return NextResponse.json(parsedData);
-    } catch (parseError) {
+    if (!result.data) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Failed to parse scraper latest output as JSON', 
+        {
+          success: false,
+          error: result.error || 'Failed to parse scraper latest output as JSON',
           rawOutput: result.stdout,
-          stderr: result.stderr 
+          stderr: result.stderr,
         },
-        { status: 500 }
+        { status: result.status }
       );
     }
-  } catch (executionError: any) {
-    const stdout = executionError.stdout || '';
-    try {
-      if (stdout) {
-        return NextResponse.json(JSON.parse(stdout), { status: 500 });
-      }
-    } catch (_) {}
 
+    return NextResponse.json(result.data, { status: result.status });
+  } catch (executionError: unknown) {
     return NextResponse.json(
-      { 
-        success: false, 
-        error: executionError.error?.message || 'Execution error during scraping latest',
-        stderr: executionError.stderr || '',
-        stdout
+      {
+        success: false,
+        error: getErrorMessage(executionError, 'Execution error during scraping latest'),
       },
       { status: 500 }
     );
