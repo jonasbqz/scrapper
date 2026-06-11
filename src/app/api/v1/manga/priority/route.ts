@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
-import { getErrorMessage } from '../../../runScraper';
 
 export const dynamic = 'force-dynamic';
-
-type PriorityQueueItem = {
-  title: string;
-  slug: string;
-  url: string;
-  addedAt: string;
-};
 
 export async function GET() {
   const queuePath = path.join(process.cwd(), 'priority_queue.json');
@@ -18,7 +10,7 @@ export async function GET() {
     const data = await fsPromises.readFile(queuePath, 'utf8');
     const queue = JSON.parse(data);
     return NextResponse.json({ success: true, queue });
-  } catch {
+  } catch (e) {
     return NextResponse.json({ success: true, queue: [] });
   }
 }
@@ -28,11 +20,11 @@ export async function DELETE(request: NextRequest) {
   const queuePath = path.join(process.cwd(), 'priority_queue.json');
 
   try {
-    let queue: PriorityQueueItem[] = [];
+    let queue: any[] = [];
     try {
       const data = await fsPromises.readFile(queuePath, 'utf8');
       queue = JSON.parse(data);
-    } catch {
+    } catch (e) {
       // Empty queue
     }
 
@@ -44,7 +36,7 @@ export async function DELETE(request: NextRequest) {
 
     await fsPromises.writeFile(queuePath, JSON.stringify(queue, null, 2), 'utf8');
     return NextResponse.json({ success: true, message: slug ? `Removed ${slug} from priority queue` : 'Cleared priority queue' });
-  } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: getErrorMessage(error, 'Failed to update priority queue') }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
