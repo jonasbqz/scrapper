@@ -4,8 +4,48 @@ import path from 'path';
 import fs from 'fs';
 import { getPythonExecutable } from '../../../pythonResolver';
 
+const LATEST_CACHE_TTL_MS = 10 * 60 * 1000;
+let latestCache: { data: unknown; expiresAt: number } | null = null;
+let pendingLatest: Promise<unknown> | null = null;
+
+function runLatestScraper(pythonExecutable: string, scraperScript: string, targetUrl: string) {
+  return new Promise<unknown>((resolve, reject) => {
+    execFile(
+      pythonExecutable,
+      [scraperScript, targetUrl],
+      { timeout: 30000, maxBuffer: 20 * 1024 * 1024, windowsHide: true },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject({ error, stdout, stderr });
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(stdout));
+        } catch (parseError) {
+          reject({
+            error: parseError,
+            stdout,
+            stderr,
+            parse: true,
+          });
+        }
+      }
+    );
+  });
+}
+
 export async function GET(request: NextRequest) {
   const targetUrl = 'https://www.leercapitulo.co';
+
+  if (latestCache && latestCache.expiresAt > Date.now()) {
+    return NextResponse.json(latestCache.data, {
+      headers: {
+        'Cache-Control': 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800',
+        'X-Scraper-Cache': 'HIT',
+      },
+    });
+  }
 
   // Paths to Python executable and the scraper script
   const pythonExecutable = getPythonExecutable();
@@ -28,31 +68,29 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-      execFile(pythonExecutable, [scraperScript, targetUrl], (error, stdout, stderr) => {
-        if (error) {
-          reject({ error, stdout, stderr });
-        } else {
-          resolve({ stdout, stderr });
-        }
-      });
-    });
+    pendingLatest = pendingLatest ?? runLatestScraper(pythonExecutable, scraperScript, targetUrl);
+    const parsedData = await pendingLatest;
+    latestCache = {
+      data: parsedData,
+      expiresAt: Date.now() + LATEST_CACHE_TTL_MS,
+    };
 
-    try {
-      const parsedData = JSON.parse(result.stdout);
-      return NextResponse.json(parsedData);
-    } catch (parseError) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Failed to parse scraper latest output as JSON', 
-          rawOutput: result.stdout,
-          stderr: result.stderr 
-        },
-        { status: 500 }
-      );
-    }
+    return NextResponse.json(parsedData, {
+      headers: {
+        'Cache-Control': 'public, max-age=60, s-maxage=600, stale-while-revalidate=1800',
+        'X-Scraper-Cache': 'MISS',
+      },
+    });
   } catch (executionError: any) {
+    if (latestCache) {
+      return NextResponse.json(latestCache.data, {
+        headers: {
+          'Cache-Control': 'public, max-age=30, s-maxage=300, stale-while-revalidate=1800',
+          'X-Scraper-Cache': 'STALE',
+        },
+      });
+    }
+
     const stdout = executionError.stdout || '';
     try {
       if (stdout) {
@@ -69,5 +107,7 @@ export async function GET(request: NextRequest) {
       },
       { status: 500 }
     );
+  } finally {
+    pendingLatest = null;
   }
 }
