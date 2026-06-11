@@ -28,7 +28,7 @@ export type RunScraperResult = {
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_BUFFER = 20 * 1024 * 1024;
 const DEFAULT_MAX_CONCURRENT = 1;
-const DEFAULT_MAX_QUEUE = 0;
+const DEFAULT_MAX_QUEUE = 12;
 
 let activeScrapers = 0;
 const scraperQueue: QueueItem[] = [];
@@ -38,13 +38,8 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function readNonNegativeInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value || '', 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
 const maxConcurrent = readPositiveInt(process.env.SCRAPER_MAX_CONCURRENT, DEFAULT_MAX_CONCURRENT);
-const maxQueue = readNonNegativeInt(process.env.SCRAPER_MAX_QUEUE, DEFAULT_MAX_QUEUE);
+const maxQueue = readPositiveInt(process.env.SCRAPER_MAX_QUEUE, DEFAULT_MAX_QUEUE);
 const timeoutMs = readPositiveInt(process.env.SCRAPER_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
 
 function acquireScraperSlot(): Promise<void> {
@@ -111,12 +106,9 @@ function parseScraperOutput(stdout: string, stderr: string, fallbackError: strin
 }
 
 export async function runScraper(targetUrl: string, label = 'scraping'): Promise<RunScraperResult> {
-  let hasSlot = false;
+  await acquireScraperSlot();
 
   try {
-    await acquireScraperSlot();
-    hasSlot = true;
-
     const { pythonExecutable, scraperScript } = validateRuntime();
 
     return await new Promise<RunScraperResult>((resolve) => {
@@ -152,8 +144,6 @@ export async function runScraper(targetUrl: string, label = 'scraping'): Promise
       status,
     };
   } finally {
-    if (hasSlot) {
-      releaseScraperSlot();
-    }
+    releaseScraperSlot();
   }
 }
