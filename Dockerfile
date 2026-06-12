@@ -24,9 +24,9 @@ ENV PATH="/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir "scrapling[all]>=0.4.0"
 
-# Install playwright chromium and its system dependencies
-RUN playwright install chromium && \
-    playwright install-deps
+# Install patchright chromium and its system dependencies
+RUN python3 -m patchright install chromium && \
+    python3 -m patchright install-deps
 
 # Copy Node.js dependency manifests
 COPY package.json package-lock.json* ./
