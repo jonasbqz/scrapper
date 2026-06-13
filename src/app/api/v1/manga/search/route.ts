@@ -3,6 +3,7 @@ import { execFile } from 'child_process';
 import path from 'path';
 import fs, { promises as fsPromises } from 'fs';
 import { getPythonExecutable } from '../../../pythonResolver';
+import { enqueueExecution } from '../../../queue';
 
 async function trackSearch(results: any[], pythonExecutable: string) {
   if (!results || results.length === 0) return;
@@ -51,13 +52,16 @@ async function trackSearch(results: any[], pythonExecutable: string) {
         
         console.log(`[Priority] Manga ${title} (${slug}) reached 10 searches. Triggering background scrape.`);
         const scraperScript = path.join(process.cwd(), 'scraper.py');
-        execFile(pythonExecutable, [scraperScript, url], (err) => {
-          if (err) {
-            console.error(`[Priority] Background scrape failed for ${slug}:`, err);
-          } else {
-            console.log(`[Priority] Background scrape completed for ${slug}`);
-          }
-        });
+        enqueueExecution(() => new Promise<void>((resolve) => {
+          execFile(pythonExecutable, [scraperScript, url], (err) => {
+            if (err) {
+              console.error(`[Priority] Background scrape failed for ${slug}:`, err);
+            } else {
+              console.log(`[Priority] Background scrape completed for ${slug}`);
+            }
+            resolve();
+          });
+        }));
       }
     }
   } catch (error) {
@@ -98,7 +102,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    const result = await enqueueExecution(() => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
       execFile(pythonExecutable, [scraperScript, targetUrl], (error, stdout, stderr) => {
         if (error) {
           reject({ error, stdout, stderr });
@@ -106,7 +110,7 @@ export async function GET(request: NextRequest) {
           resolve({ stdout, stderr });
         }
       });
-    });
+    }));
 
     try {
       const parsedData = JSON.parse(result.stdout);

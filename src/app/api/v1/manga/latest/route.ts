@@ -3,13 +3,14 @@ import { execFile } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { getPythonExecutable } from '../../../pythonResolver';
+import { enqueueExecution } from '../../../queue';
 
 const LATEST_CACHE_TTL_MS = 10 * 60 * 1000;
 let latestCache: { data: unknown; expiresAt: number } | null = null;
 let pendingLatest: Promise<unknown> | null = null;
 
 function runLatestScraper(pythonExecutable: string, scraperScript: string, targetUrl: string) {
-  return new Promise<unknown>((resolve, reject) => {
+  return enqueueExecution(() => new Promise<unknown>((resolve, reject) => {
     execFile(
       pythonExecutable,
       [scraperScript, targetUrl],
@@ -32,7 +33,7 @@ function runLatestScraper(pythonExecutable: string, scraperScript: string, targe
         }
       }
     );
-  });
+  }));
 }
 
 export async function GET(request: NextRequest) {

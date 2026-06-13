@@ -3,6 +3,7 @@ import { execFile } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { getPythonExecutable } from '../pythonResolver';
+import { enqueueExecution } from '../queue';
 
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get('url');
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    const result = await enqueueExecution(() => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
       execFile(pythonExecutable, [scraperScript, url], (error, stdout, stderr) => {
         if (error) {
           reject({ error, stdout, stderr });
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
           resolve({ stdout, stderr });
         }
       });
-    });
+    }));
 
     // The script prints the JSON response to stdout
     try {
